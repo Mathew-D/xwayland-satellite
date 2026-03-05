@@ -661,6 +661,8 @@ impl Event for client::wl_pointer::Event {
                             .insert_one(target, CurrentSurface::Decoration(parent))
                             .unwrap();
                     } else {
+                        drop(query);
+                        let _ = state.world.remove_one::<CurrentSurface>(target);
                         warn!("could not enter surface {}: stale surface", surface.id());
                     }
 
@@ -748,8 +750,8 @@ impl Event for client::wl_pointer::Event {
                     return;
                 }
                 debug!("leaving surface ({})", surface.id());
-                if let Ok(CurrentSurface::Decoration(parent)) =
-                    state.world.remove_one::<CurrentSurface>(target)
+                if let Some(CurrentSurface::Decoration(parent)) =
+                    state.world.remove_one::<CurrentSurface>(target).ok()
                 {
                     decoration::handle_pointer_leave(state, parent);
                     return;
