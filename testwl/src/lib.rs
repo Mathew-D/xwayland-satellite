@@ -851,6 +851,14 @@ impl Server {
         self.display.flush_clients().unwrap();
     }
 
+    #[track_caller]
+    pub fn pointer_motion(&mut self, x: f64, y: f64) {
+        let pointer = self.state.pointer.as_ref().expect("No pointer created");
+        pointer.pointer.motion(25, x, y);
+        pointer.pointer.frame();
+        self.display.flush_clients().unwrap();
+    }
+
     pub fn new_output(&mut self, x: i32, y: i32) {
         self.state.last_output_global =
             Some(self.dh.create_global::<State, WlOutput, _>(4, (x, y)));

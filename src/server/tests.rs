@@ -2640,6 +2640,61 @@ fn touch_fractional_scale() {
 }
 
 #[test]
+fn pointer_fractional_scale_updates_while_hovered() {
+    let mut f = TestFixture::new_pre_connect(|testwl| {
+        testwl.enable_fractional_scale();
+    });
+    let comp = f.compositor();
+    let (_, output) = f.new_output(0, 0);
+    let pointer =
+        TestObject::<WlPointer>::from_request(&comp.seat.obj, wl_seat::Request::GetPointer {});
+
+    let toplevel = Window::new(1);
+    let (_, id) = f.create_toplevel(&comp, toplevel);
+    f.testwl.move_surface_to_output(id, &output);
+
+    let surface_data = f.testwl.get_surface_data(id).unwrap();
+    let fractional = surface_data.fractional.as_ref().cloned().unwrap();
+
+    let get_motion = || {
+        let mut motion = None;
+        for event in pointer.data.events.lock().unwrap().drain(..) {
+            if let wayland_client::protocol::wl_pointer::Event::Motion {
+                surface_x,
+                surface_y,
+                ..
+            } = event
+            {
+                motion = Some((surface_x, surface_y));
+            }
+        }
+        motion.expect("Didn't get motion event")
+    };
+
+    f.testwl.move_pointer_to(id, 0.0, 0.0);
+    f.run();
+
+    f.testwl.pointer_motion(20.0, 40.0);
+    f.testwl.dispatch();
+    f.run();
+    f.run();
+    let (x, y) = get_motion();
+    assert_eq!(x, 20.0);
+    assert_eq!(y, 40.0);
+
+    fractional.preferred_scale(180); // 1.5x scale
+    f.run();
+
+    f.testwl.pointer_motion(20.0, 40.0);
+    f.testwl.dispatch();
+    f.run();
+    f.run();
+    let (x, y) = get_motion();
+    assert_eq!(x, 20.0 * 1.5);
+    assert_eq!(y, 40.0 * 1.5);
+}
+
+#[test]
 fn tablet_tool_fractional_scale() {
     let mut f = TestFixture::new_pre_connect(|testwl| {
         testwl.enable_fractional_scale();

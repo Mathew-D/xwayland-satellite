@@ -713,27 +713,33 @@ impl Event for client::wl_pointer::Event {
                 if !handle_pending_enter(target, state, "motion") {
                     return;
                 }
-                {
-                    let Ok(surface) = state.world.get::<&CurrentSurface>(target) else {
+                let scale = {
+                    let Ok(current_surface) = state.world.get::<&CurrentSurface>(target) else {
                         warn!("could not motion on surface: stale surface");
                         return;
                     };
-                    if let CurrentSurface::Decoration(parent) = &*surface {
-                        decoration::handle_pointer_motion(state, *parent, surface_x, surface_y);
-                        return;
+                    match &*current_surface {
+                        CurrentSurface::Decoration(parent) => {
+                            decoration::handle_pointer_motion(state, *parent, surface_x, surface_y);
+                            return;
+                        }
+                        CurrentSurface::Xwayland(entity) => {
+                            let Ok(scale) = state.world.get::<&SurfaceScaleFactor>(*entity) else {
+                                warn!("could not motion on surface: stale scale");
+                                return;
+                            };
+                            scale.0
+                        }
                     }
-                }
-                let (server, scale) = state
-                    .world
-                    .query_one_mut::<(&WlPointer, &SurfaceScaleFactor)>(target)
-                    .unwrap();
+                };
+                let server = state.world.get::<&WlPointer>(target).unwrap();
                 trace!(
                     target: "pointer_position",
                     "pointer motion {} {}",
-                    surface_x * scale.0,
-                    surface_y * scale.0
+                    surface_x * scale,
+                    surface_y * scale
                 );
-                server.motion(time, surface_x * scale.0, surface_y * scale.0);
+                server.motion(time, surface_x * scale, surface_y * scale);
             }
             Self::Button {
                 serial,
