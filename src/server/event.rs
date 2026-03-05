@@ -229,8 +229,8 @@ impl SurfaceEvents {
                         connection.focus_window(*window, output);
                     }
 
+                    let output_scale = output_data.get::<&OutputScaleFactor>().unwrap().get();
                     if state.fractional_scale.is_none() {
-                        let output_scale = output_data.get::<&OutputScaleFactor>().unwrap().get();
                         data.get::<&mut SurfaceScaleFactor>().unwrap().0 = output_scale;
                         drop(query);
                         update_surface_viewport(
@@ -238,12 +238,25 @@ impl SurfaceEvents {
                             state.world.query_one(target).unwrap(),
                         );
                     } else {
-                        let scale = data.get::<&SurfaceScaleFactor>().unwrap();
-                        if update_output_scale(
-                            state.world.query_one(on_output.0).unwrap(),
-                            OutputScaleFactor::Fractional(scale.0),
-                        ) {
-                            state.updated_outputs.push(on_output.0);
+                        let mut scale = data.get::<&mut SurfaceScaleFactor>().unwrap();
+                        if (scale.0 - 1.0).abs() < f64::EPSILON
+                            && (output_scale - 1.0).abs() > f64::EPSILON
+                        {
+                            scale.0 = output_scale;
+                            drop(scale);
+                            drop(query);
+                            update_surface_viewport(
+                                &state.world,
+                                state.world.query_one(target).unwrap(),
+                            );
+                        } else if (scale.0 - 1.0).abs() > f64::EPSILON {
+                            let scale = scale.0;
+                            if update_output_scale(
+                                state.world.query_one(on_output.0).unwrap(),
+                                OutputScaleFactor::Fractional(scale),
+                            ) {
+                                state.updated_outputs.push(on_output.0);
+                            }
                         }
                     }
                 }
@@ -647,14 +660,34 @@ impl Event for client::wl_pointer::Event {
                 };
 
                 let server = state.world.get::<&WlPointer>(target).unwrap();
-                cmd.insert(target, (*scale,));
+                let effective_scale = if (scale.0 - 1.0).abs() < f64::EPSILON {
+                    output
+                        .as_ref()
+                        .and_then(|on_output| {
+                            state
+                                .world
+                                .get::<&OutputScaleFactor>(on_output.0)
+                                .ok()
+                                .map(|output_scale| output_scale.get())
+                        })
+                        .unwrap_or(scale.0)
+                } else {
+                    scale.0
+                };
+
+                cmd.insert(target, (SurfaceScaleFactor(effective_scale),));
 
                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
                 let output_name = get_output_name(output.as_ref().copied(), &state.world);
                 let window_dims = window_data.attrs.dims;
                 let mut do_enter = || {
-                    debug!("pointer entering {} ({serial} {})", surface.id(), scale.0);
-                    server.enter(serial, surface, surface_x * scale.0, surface_y * scale.0);
+                    debug!("pointer entering {} ({serial} {})", surface.id(), effective_scale);
+                    server.enter(
+                        serial,
+                        surface,
+                        surface_x * effective_scale,
+                        surface_y * effective_scale,
+                    );
                     connection.raise_to_top(*window);
                     if !surface_is_popup {
                         connection.focus_window(*window, output_name.clone());
@@ -757,7 +790,7 @@ impl Event for client::wl_pointer::Event {
                         return;
                     }
                     MotionTarget::Xwayland(entity) => {
-                        let (scale, transition_data) = {
+                        let (effective_scale, transition_data) = {
                             let mut query = state.world.query_one::<(
                                 &x::Window,
                                 &WindowData,
@@ -789,7 +822,22 @@ impl Event for client::wl_pointer::Event {
                                 )
                             });
 
-                            (scale.0, transition_data)
+                            let effective_scale = if (scale.0 - 1.0).abs() < f64::EPSILON {
+                                output
+                                    .as_ref()
+                                    .and_then(|on_output| {
+                                        state
+                                            .world
+                                            .get::<&OutputScaleFactor>(on_output.0)
+                                            .ok()
+                                            .map(|output_scale| output_scale.get())
+                                    })
+                                    .unwrap_or(scale.0)
+                            } else {
+                                scale.0
+                            };
+
+                            (effective_scale, transition_data)
                         };
 
                         if let Some((window, dims, output_name)) = transition_data {
@@ -799,7 +847,7 @@ impl Event for client::wl_pointer::Event {
                             state.last_hovered = Some(window);
                         }
 
-                        scale
+                        effective_scale
                     }
                 };
                 let server = state.world.get::<&WlPointer>(target).unwrap();
