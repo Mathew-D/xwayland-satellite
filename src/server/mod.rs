@@ -688,6 +688,10 @@ impl<C: XConnection> ServerState<C> {
                     for (surface, (OnOutput(s_output), surface_scale)) in surface_query.iter() {
                         if s_output == output {
                             surface_scale.0 = output_scale.get();
+                            if let Ok(mut window_data) = self.world.get::<&mut WindowData>(surface)
+                            {
+                                window_data.effective_scale = surface_scale.0;
+                            }
                             surfaces.push(surface);
                         }
                     }
