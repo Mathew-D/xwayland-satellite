@@ -1573,7 +1573,7 @@ fn raise_window_on_pointer_event() {
 
     f.testwl.move_pointer_to(id1, 0.0, 0.0);
     f.run();
-    assert_eq!(f.connection().focused_window, Some(win2));
+    assert_eq!(f.connection().focused_window, Some(win1));
     assert_eq!(f.satellite.last_hovered, Some(win1));
 }
 

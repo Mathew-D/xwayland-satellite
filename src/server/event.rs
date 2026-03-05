@@ -657,6 +657,8 @@ impl Event for client::wl_pointer::Event {
                     server.enter(serial, surface, surface_x * scale.0, surface_y * scale.0);
                     connection.raise_to_top(*window);
                     if !surface_is_popup {
+                        connection.focus_window(*window, output_name.clone());
+                        state.last_focused_toplevel = Some(*window);
                         let _ = connection.set_window_dims(
                             *window,
                             PendingSurfaceState {
