@@ -572,6 +572,7 @@ impl XState {
                 }
             }
             x if x == self.atoms.active_win => {
+                server_state.connection.raise_to_top(e.window());
                 server_state.activate_window(e.window());
             }
             x if x == self.atoms.moveresize => {
