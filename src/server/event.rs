@@ -661,8 +661,6 @@ impl Event for client::wl_pointer::Event {
                             .insert_one(target, CurrentSurface::Decoration(parent))
                             .unwrap();
                     } else {
-                        drop(query);
-                        let _ = state.world.remove_one::<CurrentSurface>(target);
                         warn!("could not enter surface {}: stale surface", surface.id());
                     }
 
@@ -746,13 +744,21 @@ impl Event for client::wl_pointer::Event {
             }
             Self::Leave { serial, surface } => {
                 let _ = state.world.remove_one::<PendingEnter>(target);
+                let current_surface = state.world.remove_one::<CurrentSurface>(target).ok();
+                if let Some(CurrentSurface::Xwayland(entity)) = current_surface {
+                    let window = state.world.get::<&x::Window>(entity).ok().map(|w| *w);
+                    if state.last_hovered == window {
+                            state.last_hovered = None;
+                    }
+                }
                 if !surface.is_alive() {
+                    if let Some(CurrentSurface::Decoration(parent)) = current_surface {
+                        decoration::handle_pointer_leave(state, parent);
+                    }
                     return;
                 }
                 debug!("leaving surface ({})", surface.id());
-                if let Some(CurrentSurface::Decoration(parent)) =
-                    state.world.remove_one::<CurrentSurface>(target).ok()
-                {
+                if let Some(CurrentSurface::Decoration(parent)) = current_surface {
                     decoration::handle_pointer_leave(state, parent);
                     return;
                 }
