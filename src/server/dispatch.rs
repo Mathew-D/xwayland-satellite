@@ -916,17 +916,40 @@ impl<S: X11Selection> Dispatch<LockedPointerServer, Entity> for InnerServerState
                 surface_x,
                 surface_y,
             } => {
-                let (client, scale) = state
+                let (client, lock_surface) = {
+                    let (client, lock_surface) = state
+                        .world
+                        .query_one_mut::<(&LockedPointerClient, &Entity)>(*entity)
+                        .unwrap();
+                    (client.clone(), *lock_surface)
+                };
+
+                let scale = state
                     .world
-                    .query_one_mut::<(&LockedPointerClient, &SurfaceScaleFactor)>(*entity)
-                    .unwrap();
+                    .get::<&SurfaceScaleFactor>(lock_surface)
+                    .ok()
+                    .map(|scale| scale.0)
+                    .or_else(|| {
+                        state
+                            .world
+                            .get::<&OnOutput>(lock_surface)
+                            .ok()
+                            .and_then(|on_output| {
+                                state
+                                    .world
+                                    .get::<&OutputScaleFactor>(on_output.0)
+                                    .ok()
+                                    .map(|output_scale| output_scale.get())
+                            })
+                    })
+                    .unwrap_or(1.0);
 
                 // Xwayland believes that the surface is actually <surface scale factor> times bigger
                 // than it currently is, and therefore that the cursor position is also scaled up by the same
                 // amount. So we need to divide the cursor position from Xwayland by the surface scale
                 // to get where the cursor should actually be positioned.
 
-                client.set_cursor_position_hint(surface_x / scale.0, surface_y / scale.0);
+                client.set_cursor_position_hint(surface_x / scale, surface_y / scale);
             }
             lp::Request::Destroy => {
                 {
@@ -1019,16 +1042,8 @@ impl<S: X11Selection>
                     )
                 };
                 let server = data_init.init(id, entity);
-                let surface_scale = state
-                    .world
-                    .get::<&SurfaceScaleFactor>(surf_key)
-                    .as_deref()
-                    .copied()
-                    .unwrap();
 
-                state
-                    .world
-                    .spawn_at(entity, (client, server, surface_scale));
+                state.world.spawn_at(entity, (client, server, surf_key));
             }
             Request::Destroy => {
                 client.destroy();

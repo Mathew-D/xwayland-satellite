@@ -733,23 +733,71 @@ impl Event for client::wl_pointer::Event {
                 if !handle_pending_enter(target, state, "motion") {
                     return;
                 }
-                let scale = {
+                enum MotionTarget {
+                    Decoration(Entity),
+                    Xwayland(Entity),
+                }
+
+                let motion_target = {
                     let Ok(current_surface) = state.world.get::<&CurrentSurface>(target) else {
                         warn!("could not motion on surface: stale surface");
                         return;
                     };
                     match &*current_surface {
-                        CurrentSurface::Decoration(parent) => {
-                            decoration::handle_pointer_motion(state, *parent, surface_x, surface_y);
-                            return;
-                        }
-                        CurrentSurface::Xwayland(entity) => {
-                            let Ok(scale) = state.world.get::<&SurfaceScaleFactor>(*entity) else {
-                                warn!("could not motion on surface: stale scale");
+                        CurrentSurface::Decoration(parent) => MotionTarget::Decoration(*parent),
+                        CurrentSurface::Xwayland(entity) => MotionTarget::Xwayland(*entity),
+                    }
+                };
+
+                let scale = match motion_target {
+                    MotionTarget::Decoration(parent) => {
+                        decoration::handle_pointer_motion(state, parent, surface_x, surface_y);
+                        return;
+                    }
+                    MotionTarget::Xwayland(entity) => {
+                        let (scale, transition_data) = {
+                            let mut query = state.world.query_one::<(
+                                &x::Window,
+                                &WindowData,
+                                &SurfaceRole,
+                                Option<&OnOutput>,
+                                &SurfaceScaleFactor,
+                            )>(entity);
+                            let Ok(query) = query.as_mut() else {
+                                warn!("could not motion on surface: stale surface");
                                 return;
                             };
-                            scale.0
+                            let Some((window, window_data, role, output, scale)) = query.get() else {
+                                warn!("could not motion on surface: stale surface");
+                                return;
+                            };
+
+                            let transition_data = (!matches!(role, SurfaceRole::Popup(_))
+                                && state.last_hovered != Some(*window))
+                            .then(|| {
+                                (
+                                    *window,
+                                    PendingSurfaceState {
+                                        x: window_data.attrs.dims.x as i32,
+                                        y: window_data.attrs.dims.y as i32,
+                                        width: window_data.attrs.dims.width as i32,
+                                        height: window_data.attrs.dims.height as i32,
+                                    },
+                                    get_output_name(output.as_ref().copied(), &state.world),
+                                )
+                            });
+
+                            (scale.0, transition_data)
+                        };
+
+                        if let Some((window, dims, output_name)) = transition_data {
+                            state.connection.raise_to_top(window);
+                            let _ = state.connection.set_window_dims(window, dims);
+                            state.connection.set_primary_output(output_name);
+                            state.last_hovered = Some(window);
                         }
+
+                        scale
                     }
                 };
                 let server = state.world.get::<&WlPointer>(target).unwrap();
