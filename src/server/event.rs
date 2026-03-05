@@ -660,20 +660,16 @@ impl Event for client::wl_pointer::Event {
                 };
 
                 let server = state.world.get::<&WlPointer>(target).unwrap();
-                let effective_scale = if (scale.0 - 1.0).abs() < f64::EPSILON {
-                    output
-                        .as_ref()
-                        .and_then(|on_output| {
-                            state
-                                .world
-                                .get::<&OutputScaleFactor>(on_output.0)
-                                .ok()
-                                .map(|output_scale| output_scale.get())
-                        })
-                        .unwrap_or(scale.0)
-                } else {
-                    scale.0
-                };
+                let effective_scale = output
+                    .as_ref()
+                    .and_then(|on_output| {
+                        state
+                            .world
+                            .get::<&OutputScaleFactor>(on_output.0)
+                            .ok()
+                            .map(|output_scale| output_scale.get())
+                    })
+                    .unwrap_or(scale.0);
 
                 cmd.insert(target, (SurfaceScaleFactor(effective_scale),));
 
@@ -822,20 +818,16 @@ impl Event for client::wl_pointer::Event {
                                 )
                             });
 
-                            let effective_scale = if (scale.0 - 1.0).abs() < f64::EPSILON {
-                                output
-                                    .as_ref()
-                                    .and_then(|on_output| {
-                                        state
-                                            .world
-                                            .get::<&OutputScaleFactor>(on_output.0)
-                                            .ok()
-                                            .map(|output_scale| output_scale.get())
-                                    })
-                                    .unwrap_or(scale.0)
-                            } else {
-                                scale.0
-                            };
+                            let effective_scale = output
+                                .as_ref()
+                                .and_then(|on_output| {
+                                    state
+                                        .world
+                                        .get::<&OutputScaleFactor>(on_output.0)
+                                        .ok()
+                                        .map(|output_scale| output_scale.get())
+                                })
+                                .unwrap_or(scale.0);
 
                             (effective_scale, transition_data)
                         };
