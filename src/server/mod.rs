@@ -410,6 +410,9 @@ impl<S: X11Selection> XConnection for NoConnection<S> {
     fn focus_window(&mut self, _: x::Window, _: Option<String>) {
         debug!("could not focus window without XWayland initialized");
     }
+    fn set_primary_output(&mut self, _: Option<String>) {
+        debug!("could not set primary output without XWayland initialized");
+    }
     fn close_window(&mut self, _: x::Window) {
         debug!("could not close window without XWayland initialized");
     }

@@ -1390,34 +1390,7 @@ impl XConnection for RealConnection {
         }
     }
 
-    fn focus_window(&mut self, window: x::Window, output_name: Option<String>) {
-        trace!("{window:?} {output_name:?}");
-        if let Err(e) = self.connection.send_and_check_request(&x::SetInputFocus {
-            focus: window,
-            revert_to: x::InputFocus::None,
-            time: x::CURRENT_TIME,
-        }) {
-            debug!("SetInputFocus failed ({window:?}: {e:?})");
-        }
-        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
-            mode: x::PropMode::Replace,
-            window: self.root_window(),
-            property: self.atoms.active_win,
-            r#type: x::ATOM_WINDOW,
-            data: &[window],
-        }) {
-            debug!("ChangeProperty failed ({window:?}: {e:?})");
-        }
-        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
-            mode: x::PropMode::Replace,
-            window,
-            property: self.atoms.wm_state,
-            r#type: self.atoms.wm_state,
-            data: &[WmState::Normal as u32, 0],
-        }) {
-            debug!("ChangeProperty failed ({window:?}: {e:?})");
-        }
-
+    fn set_primary_output(&mut self, output_name: Option<String>) {
         if let Some(name) = output_name {
             let Some(output) = self.outputs.get(&name).copied() else {
                 warn!("Couldn't find output {name}, primary output will be wrong");
@@ -1449,6 +1422,37 @@ impl XConnection for RealConnection {
                 });
             self.primary_output = Xid::none();
         }
+    }
+
+    fn focus_window(&mut self, window: x::Window, output_name: Option<String>) {
+        trace!("{window:?} {output_name:?}");
+        if let Err(e) = self.connection.send_and_check_request(&x::SetInputFocus {
+            focus: window,
+            revert_to: x::InputFocus::None,
+            time: x::CURRENT_TIME,
+        }) {
+            debug!("SetInputFocus failed ({window:?}: {e:?})");
+        }
+        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
+            mode: x::PropMode::Replace,
+            window: self.root_window(),
+            property: self.atoms.active_win,
+            r#type: x::ATOM_WINDOW,
+            data: &[window],
+        }) {
+            debug!("ChangeProperty failed ({window:?}: {e:?})");
+        }
+        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
+            mode: x::PropMode::Replace,
+            window,
+            property: self.atoms.wm_state,
+            r#type: self.atoms.wm_state,
+            data: &[WmState::Normal as u32, 0],
+        }) {
+            debug!("ChangeProperty failed ({window:?}: {e:?})");
+        }
+
+        self.set_primary_output(output_name);
     }
 
     fn close_window(&mut self, window: x::Window) {

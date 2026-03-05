@@ -620,10 +620,17 @@ impl Event for client::wl_pointer::Event {
                 let mut query = surface_entity.and_then(|e| {
                     state
                         .world
-                        .query_one::<(&WlSurface, &SurfaceRole, &SurfaceScaleFactor, &x::Window)>(e)
+                        .query_one::<(
+                            &WlSurface,
+                            &SurfaceRole,
+                            &SurfaceScaleFactor,
+                            &x::Window,
+                            Option<&OnOutput>,
+                        )>(e)
                         .ok()
                 });
-                let Some((surface, role, scale, window)) = query.as_mut().and_then(|q| q.get())
+                let Some((surface, role, scale, window, output)) =
+                    query.as_mut().and_then(|q| q.get())
                 else {
                     if let Some(&DecorationMarker { parent }) = surface.data() {
                         drop(query);
@@ -642,11 +649,13 @@ impl Event for client::wl_pointer::Event {
                 cmd.insert(target, (*scale,));
 
                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
+                let output_name = get_output_name(output.as_ref().copied(), &state.world);
                 let mut do_enter = || {
                     debug!("pointer entering {} ({serial} {})", surface.id(), scale.0);
                     server.enter(serial, surface, surface_x * scale.0, surface_y * scale.0);
                     connection.raise_to_top(*window);
                     if !surface_is_popup {
+                        connection.set_primary_output(output_name.clone());
                         state.last_hovered = Some(*window);
                     }
                     cmd.insert_one(target, CurrentSurface::Xwayland(surface_entity.unwrap()));

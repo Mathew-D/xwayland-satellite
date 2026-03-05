@@ -234,6 +234,8 @@ impl super::XConnection for FakeXConnection {
         self.focused_window = window.into();
     }
 
+    fn set_primary_output(&mut self, _output_name: Option<String>) {}
+
     fn raise_to_top(&mut self, window: Window) {
         assert!(
             self.windows.contains_key(&window),
