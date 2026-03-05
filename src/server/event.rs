@@ -688,6 +688,18 @@ impl Event for client::wl_pointer::Event {
                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
                 let output_name = get_output_name(output.as_ref().copied(), &state.world);
                 let window_dims = window_data.attrs.dims;
+                debug!(
+                    target: "pointer_diag",
+                    "enter serial={serial} surface={} window={:?} popup={} output={:?} effective_scale={} win_effective_scale={} surface_scale={} last_hovered={:?}",
+                    surface.id(),
+                    window,
+                    surface_is_popup,
+                    output_name,
+                    effective_scale,
+                    window_data.effective_scale,
+                    scale.0,
+                    state.last_hovered
+                );
                 let mut do_enter = || {
                     debug!("pointer entering {} ({serial} {})", surface.id(), effective_scale);
                     server.enter(
@@ -747,8 +759,17 @@ impl Event for client::wl_pointer::Event {
                 let current_surface = state.world.remove_one::<CurrentSurface>(target).ok();
                 if let Some(CurrentSurface::Xwayland(entity)) = current_surface {
                     let window = state.world.get::<&x::Window>(entity).ok().map(|w| *w);
+                    debug!(
+                        target: "pointer_diag",
+                        "leave serial={serial} xwayland_entity={entity:?} window={window:?} last_hovered={:?}",
+                        state.last_hovered
+                    );
                     if state.last_hovered == window {
                             state.last_hovered = None;
+                            debug!(
+                                target: "pointer_diag",
+                                "leave reset last_hovered window={window:?}"
+                            );
                     }
                 }
                 if !surface.is_alive() {
@@ -823,9 +844,10 @@ impl Event for client::wl_pointer::Event {
                                 return;
                             };
 
-                            let transition_data = (!matches!(role, SurfaceRole::Popup(_))
-                                && state.last_hovered != Some(*window))
-                            .then(|| {
+                            let needs_transition = !matches!(role, SurfaceRole::Popup(_))
+                                && state.last_hovered != Some(*window);
+
+                            let transition_data = needs_transition.then(|| {
                                 (
                                     *window,
                                     PendingSurfaceState {
@@ -854,6 +876,17 @@ impl Event for client::wl_pointer::Event {
                                     })
                                     .unwrap_or(scale.0)
                             };
+
+                            debug!(
+                                target: "pointer_diag",
+                                "motion window={window:?} transition={} output={:?} effective_scale={} win_effective_scale={} surface_scale={} last_hovered={:?}",
+                                needs_transition,
+                                get_output_name(output.as_ref().copied(), &state.world),
+                                effective_scale,
+                                window_data.effective_scale,
+                                scale.0,
+                                state.last_hovered
+                            );
 
                             (effective_scale, transition_data)
                         };
