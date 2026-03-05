@@ -103,6 +103,9 @@ impl Event for SurfaceEvents {
                     );
 
                     entity.get::<&mut SurfaceScaleFactor>().unwrap().0 = factor;
+                    if let Some(mut window_data) = entity.get::<&mut WindowData>() {
+                        window_data.effective_scale = factor;
+                    }
 
                     if let Some(OnOutput(output)) = entity.get::<&OnOutput>().as_deref().copied() {
                         if update_output_scale(
@@ -232,6 +235,7 @@ impl SurfaceEvents {
                     let output_scale = output_data.get::<&OutputScaleFactor>().unwrap().get();
                     if state.fractional_scale.is_none() {
                         data.get::<&mut SurfaceScaleFactor>().unwrap().0 = output_scale;
+                        win_data.effective_scale = output_scale;
                         drop(query);
                         update_surface_viewport(
                             &state.world,
@@ -243,6 +247,7 @@ impl SurfaceEvents {
                             && (output_scale - 1.0).abs() > f64::EPSILON
                         {
                             scale.0 = output_scale;
+                            win_data.effective_scale = output_scale;
                             drop(scale);
                             drop(query);
                             update_surface_viewport(
@@ -251,12 +256,15 @@ impl SurfaceEvents {
                             );
                         } else if (scale.0 - 1.0).abs() > f64::EPSILON {
                             let scale = scale.0;
+                            win_data.effective_scale = scale;
                             if update_output_scale(
                                 state.world.query_one(on_output.0).unwrap(),
                                 OutputScaleFactor::Fractional(scale),
                             ) {
                                 state.updated_outputs.push(on_output.0);
                             }
+                        } else {
+                            win_data.effective_scale = output_scale;
                         }
                     }
                 }
@@ -660,16 +668,20 @@ impl Event for client::wl_pointer::Event {
                 };
 
                 let server = state.world.get::<&WlPointer>(target).unwrap();
-                let effective_scale = output
-                    .as_ref()
-                    .and_then(|on_output| {
-                        state
-                            .world
-                            .get::<&OutputScaleFactor>(on_output.0)
-                            .ok()
-                            .map(|output_scale| output_scale.get())
-                    })
-                    .unwrap_or(scale.0);
+                let effective_scale = if (window_data.effective_scale - 1.0).abs() > f64::EPSILON {
+                    window_data.effective_scale
+                } else {
+                    output
+                        .as_ref()
+                        .and_then(|on_output| {
+                            state
+                                .world
+                                .get::<&OutputScaleFactor>(on_output.0)
+                                .ok()
+                                .map(|output_scale| output_scale.get())
+                        })
+                        .unwrap_or(scale.0)
+                };
 
                 cmd.insert(target, (SurfaceScaleFactor(effective_scale),));
 
@@ -818,16 +830,22 @@ impl Event for client::wl_pointer::Event {
                                 )
                             });
 
-                            let effective_scale = output
-                                .as_ref()
-                                .and_then(|on_output| {
-                                    state
-                                        .world
-                                        .get::<&OutputScaleFactor>(on_output.0)
-                                        .ok()
-                                        .map(|output_scale| output_scale.get())
-                                })
-                                .unwrap_or(scale.0);
+                            let effective_scale = if (window_data.effective_scale - 1.0).abs()
+                                > f64::EPSILON
+                            {
+                                window_data.effective_scale
+                            } else {
+                                output
+                                    .as_ref()
+                                    .and_then(|on_output| {
+                                        state
+                                            .world
+                                            .get::<&OutputScaleFactor>(on_output.0)
+                                            .ok()
+                                            .map(|output_scale| output_scale.get())
+                                    })
+                                    .unwrap_or(scale.0)
+                            };
 
                             (effective_scale, transition_data)
                         };

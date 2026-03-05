@@ -120,6 +120,7 @@ struct WindowData {
     mapped: bool,
     attrs: WindowAttributes,
     output_offset: WindowOutputOffset,
+    effective_scale: f64,
     activation_token: Option<String>,
 }
 
@@ -133,6 +134,7 @@ impl WindowData {
                 ..Default::default()
             },
             output_offset: WindowOutputOffset::default(),
+            effective_scale: 1.0,
             activation_token,
         }
     }
