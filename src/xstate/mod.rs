@@ -1397,7 +1397,6 @@ impl XConnection for RealConnection {
             time: x::CURRENT_TIME,
         }) {
             debug!("SetInputFocus failed ({window:?}: {e:?})");
-            return;
         }
         if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
             mode: x::PropMode::Replace,
@@ -1430,7 +1429,10 @@ impl XConnection for RealConnection {
 
             if let Err(e) = self
                 .connection
-                .send_and_check_request(&xcb::randr::SetOutputPrimary { window, output })
+                .send_and_check_request(&xcb::randr::SetOutputPrimary {
+                    window: self.root_window(),
+                    output,
+                })
             {
                 warn!("Couldn't set output {name} as primary: {e:?}");
             } else {
@@ -1441,7 +1443,7 @@ impl XConnection for RealConnection {
             let _ = self
                 .connection
                 .send_and_check_request(&xcb::randr::SetOutputPrimary {
-                    window,
+                    window: self.root_window(),
                     output: Xid::none(),
                 });
             self.primary_output = Xid::none();
