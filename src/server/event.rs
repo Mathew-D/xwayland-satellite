@@ -625,11 +625,12 @@ impl Event for client::wl_pointer::Event {
                             &SurfaceRole,
                             &SurfaceScaleFactor,
                             &x::Window,
+                            &WindowData,
                             Option<&OnOutput>,
                         )>(e)
                         .ok()
                 });
-                let Some((surface, role, scale, window, output)) =
+                let Some((surface, role, scale, window, window_data, output)) =
                     query.as_mut().and_then(|q| q.get())
                 else {
                     if let Some(&DecorationMarker { parent }) = surface.data() {
@@ -650,11 +651,21 @@ impl Event for client::wl_pointer::Event {
 
                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
                 let output_name = get_output_name(output.as_ref().copied(), &state.world);
+                let window_dims = window_data.attrs.dims;
                 let mut do_enter = || {
                     debug!("pointer entering {} ({serial} {})", surface.id(), scale.0);
                     server.enter(serial, surface, surface_x * scale.0, surface_y * scale.0);
                     connection.raise_to_top(*window);
                     if !surface_is_popup {
+                        let _ = connection.set_window_dims(
+                            *window,
+                            PendingSurfaceState {
+                                x: window_dims.x as i32,
+                                y: window_dims.y as i32,
+                                width: window_dims.width as i32,
+                                height: window_dims.height as i32,
+                            },
+                        );
                         connection.set_primary_output(output_name.clone());
                         state.last_hovered = Some(*window);
                     }
